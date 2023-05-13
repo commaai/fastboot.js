@@ -9646,13 +9646,27 @@ class FastbootDevice {
      *
      * @param {string} partition - The name of the partition to flash.
      * @param {Blob} blob - The Blob to retrieve data from.
+     * @param {"a" | "b" | "current" | "other"} targetSlot - Which slot to flash to, if partition
+     * is A/B. Defaults to current slot.
      * @param {FlashProgressCallback} onProgress - Callback for flashing progress updates.
      * @throws {FastbootError}
      */
-    async flashBlob(partition, blob, onProgress = (_progress) => { }) {
-        // Use current slot if partition is A/B
-        if ((await this.getVariable(`has-slot:${partition}`)) === "yes") {
-            partition += "_" + (await this.getVariable("current-slot"));
+    async flashBlob(partition, blob, onProgress = (_progress) => { }, targetSlot = "current") {
+        let hasSlot = await this.getVariable(`has-slot:${partition}`) == "yes";
+        if (!hasSlot && targetSlot !== "current") {
+            throw new FastbootError("FAIL", `Partition ${partition} does not have a slot, cannot flash to slot ${targetSlot}`);
+        }
+        if (hasSlot) {
+            if (targetSlot === "a" || targetSlot === "b") {
+                partition += "_" + targetSlot;
+            }
+            else {
+                let slot = await this.getVariable("current-slot");
+                if (targetSlot === "other") {
+                    slot = slot === "a" ? "b" : "a";
+                }
+                partition += "_" + slot;
+            }
         }
         let maxDlSize = await this._getDownloadSize();
         let fileHeader = await readBlobAsBuffer(blob.slice(0, FILE_HEADER_SIZE));
