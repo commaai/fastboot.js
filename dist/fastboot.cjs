@@ -9556,8 +9556,16 @@ class FastbootDevice {
         try {
             let resp = (await this.getVariable("max-download-size")).toLowerCase();
             if (resp) {
-                // AOSP fastboot requires hex
-                return Math.min(parseInt(resp, 16), MAX_DOWNLOAD_SIZE);
+                let size;
+                try {
+                    // Some bootloaders return decimal
+                    size = parseInt(resp, 10);
+                }
+                catch (e) {
+                    // Some bootloaders return hex
+                    size = parseInt(resp, 16);
+                }
+                return Math.min(size, MAX_DOWNLOAD_SIZE);
             }
         }
         catch (error) {
