@@ -506,6 +506,23 @@ export class FastbootDevice {
     }
 
     /**
+     * Determine the target name for the given partition and slot.
+     * @param {string} partition
+     * @param {"a" | "b" | "current" | "other"} targetSlot
+     */
+    async getTargetForSlotPartition(partition: string, targetSlot: "a" | "b" | "current" | "other") {
+        if (targetSlot === "a" || targetSlot === "b") {
+            return partition + "_" + targetSlot;
+        } else {
+            let slot = await this.getVariable("current-slot");
+            if (targetSlot === "other") {
+                slot = slot === "a" ? "b" : "a";
+            }
+            return partition + "_" + slot;
+        }
+    }
+
+    /**
      * Flash the given Blob to the given partition on the device. Any image
      * format supported by the bootloader is allowed, e.g. sparse or raw images.
      * Large raw images will be converted to sparse images automatically, and
@@ -527,20 +544,13 @@ export class FastbootDevice {
     ) {
         let hasSlot = await this.getVariable(`has-slot:${partition}`) == "yes";
         if (!hasSlot && targetSlot !== "current") {
-            throw new FastbootError(
-                "FAIL",
-                `Partition ${partition} does not have a slot, cannot flash to slot ${targetSlot}`
-            );
-        }
-        if (hasSlot) {
-            if (targetSlot === "a" || targetSlot === "b") {
-                partition += "_" + targetSlot;
-            } else {
-                let slot = await this.getVariable("current-slot");
-                if (targetSlot === "other") {
-                    slot = slot === "a" ? "b" : "a";
-                }
-                partition += "_" + slot;
+            partition = await this.getTargetForSlotPartition(partition, targetSlot);
+            hasSlot = await this.getVariable(`partition-type:${partition}`) !== null;
+            if (!hasSlot) {
+                throw new FastbootError(
+                  "FAIL",
+                  `Partition ${partition} does not have a slot, cannot flash to slot ${targetSlot}`
+                );
             }
         }
 
