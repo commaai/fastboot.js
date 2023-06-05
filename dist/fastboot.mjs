@@ -9582,8 +9582,16 @@ class FastbootDevice {
         try {
             let resp = (await this.getVariable("max-download-size")).toLowerCase();
             if (resp) {
-                // AOSP fastboot requires hex
-                return Math.min(parseInt(resp, 16), MAX_DOWNLOAD_SIZE);
+                let size;
+                try {
+                    // Some bootloaders return decimal
+                    size = parseInt(resp, 10);
+                }
+                catch (e) {
+                    // Some bootloaders return hex
+                    size = parseInt(resp, 16);
+                }
+                return Math.min(size, MAX_DOWNLOAD_SIZE);
             }
         }
         catch (error) {
@@ -9664,6 +9672,23 @@ class FastbootDevice {
         }
     }
     /**
+     * Determine the target name for the given partition and slot.
+     * @param {string} partition
+     * @param {"a" | "b" | "current" | "other"} targetSlot
+     */
+    async getTargetForSlotPartition(partition, targetSlot) {
+        if (targetSlot === "a" || targetSlot === "b") {
+            return partition + "_" + targetSlot;
+        }
+        else {
+            let slot = await this.getVariable("current-slot");
+            if (targetSlot === "other") {
+                slot = slot === "a" ? "b" : "a";
+            }
+            return partition + "_" + slot;
+        }
+    }
+    /**
      * Flash the given Blob to the given partition on the device. Any image
      * format supported by the bootloader is allowed, e.g. sparse or raw images.
      * Large raw images will be converted to sparse images automatically, and
@@ -9680,18 +9705,10 @@ class FastbootDevice {
     async flashBlob(partition, blob, onProgress = (_progress) => { }, targetSlot = "current") {
         let hasSlot = await this.getVariable(`has-slot:${partition}`) == "yes";
         if (!hasSlot && targetSlot !== "current") {
-            throw new FastbootError("FAIL", `Partition ${partition} does not have a slot, cannot flash to slot ${targetSlot}`);
-        }
-        if (hasSlot) {
-            if (targetSlot === "a" || targetSlot === "b") {
-                partition += "_" + targetSlot;
-            }
-            else {
-                let slot = await this.getVariable("current-slot");
-                if (targetSlot === "other") {
-                    slot = slot === "a" ? "b" : "a";
-                }
-                partition += "_" + slot;
+            partition = await this.getTargetForSlotPartition(partition, targetSlot);
+            hasSlot = await this.getVariable(`partition-type:${partition}`) !== null;
+            if (!hasSlot) {
+                throw new FastbootError("FAIL", `Partition ${partition} does not have a slot, cannot flash to slot ${targetSlot}`);
             }
         }
         let maxDlSize = await this._getDownloadSize();
