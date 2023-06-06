@@ -9582,16 +9582,9 @@ class FastbootDevice {
         try {
             let resp = (await this.getVariable("max-download-size")).toLowerCase();
             if (resp) {
-                let size;
-                try {
-                    // Some bootloaders return decimal
-                    size = parseInt(resp, 10);
-                }
-                catch (e) {
-                    // Some bootloaders return hex
-                    size = parseInt(resp, 16);
-                }
-                return Math.min(size, MAX_DOWNLOAD_SIZE);
+                // Some bootloaders return hex, some return decimal
+                // parseInt handles both by detecting the "0x" prefix
+                return Math.min(parseInt(resp), MAX_DOWNLOAD_SIZE);
             }
         }
         catch (error) {
